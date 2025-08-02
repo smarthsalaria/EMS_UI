@@ -2,39 +2,45 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Box, Typography, Divider, Modal } from '@mui/material';
 import { CircularProgressbar } from 'react-circular-progressbar';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useMediaQuery } from 'react-responsive';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
 import 'react-circular-progressbar/dist/styles.css';
 import './LiveMetrics.css';
 import OperationMode from './OperationMode';
-import { useMediaQuery } from 'react-responsive';
-import { useNavigate } from 'react-router-dom';
 
 const LiveMetrics = ({ theme }) => {
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
   const navigate = useNavigate();
+
   const defaultLayout = [
     'activePower', 'reactivePower', 'powerFactor',
     'voltage', 'frequency', 'capacity',
     'soc', 'soh'
   ];
 
-  const [metrics, setMetrics] = useState([]);
+  const [metrics, setMetrics] = useState({});
   const [alarms, setAlarms] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [layout, setLayout] = useState(() => {
-    const saved = localStorage.getItem('liveMetricsLayout');
+    const saved = sessionStorage.getItem('liveMetricsLayout');
     return saved ? JSON.parse(saved) : defaultLayout;
   });
 
   useEffect(() => {
+    const token = sessionStorage.getItem('token');
+    console.log("🔐 Received token:", token);
+    if (!token) return;
+
+    const config = { headers: { Authorization: `Bearer ${token}` } };
     let timeline = [];
     let index = 0;
     let intervalId;
 
-    fetch('/dummy.json')
-      .then((res) => res.json())
-      .then((data) => {
-        timeline = data.metricsTimeline || [];
-        setAlarms(data.alarms || []);
+    axios.get('http://localhost:5000/api/metrics', config)
+      .then((res) => {
+        timeline = res.data || [];
         if (timeline.length > 0) setMetrics(timeline[0]);
 
         intervalId = setInterval(() => {
@@ -43,81 +49,96 @@ const LiveMetrics = ({ theme }) => {
             index = (index + 1) % timeline.length;
           }
         }, 5000);
+      })
+      .catch((err) => {
+        console.error('Error fetching metrics:', err);
       });
+
+    axios.get('http://localhost:5000/api/alarms', config)
+      .then((res) => setAlarms(res.data || []))
+      .catch((err) => console.error('Error fetching alarms:', err));
 
     return () => clearInterval(intervalId);
   }, []);
 
   const onDragEnd = ({ source, destination }) => {
     if (!destination || source.index === destination.index) return;
-
     const newLayout = Array.from(layout);
     const [movedItem] = newLayout.splice(source.index, 1);
     newLayout.splice(destination.index, 0, movedItem);
-
     setLayout(newLayout);
-    localStorage.setItem('liveMetricsLayout', JSON.stringify(newLayout));
+    sessionStorage.setItem('liveMetricsLayout', JSON.stringify(newLayout));
   };
 
-  // Function to return dot color based on priority
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'high':
-        return 'red';  // High priority - red
-      case 'medium':
-        return 'orange';  // Medium priority - orange
-      case 'low':
-        return 'green';  // Low priority - green
-      default:
-        return 'gray';  // Default color if priority is undefined
+      case 'high': return 'red';
+      case 'medium': return 'orange';
+      case 'low': return 'green';
+      default: return 'gray';
     }
   };
-  const handleAlarmClick = () => {
-    navigate('/dashboard/alarms');
-  };
+
+  const handleAlarmClick = () => navigate('/dashboard/alarms');
 
   const metricValueMap = useMemo(() => ({
-    activePower: { label: 'Active Power (P)', value: Math.abs(metrics.activePower || 0), max: Math.abs(metrics.maxActivePower || 100), unit: 'kW' },
-    reactivePower: { label: 'Reactive Power (Q)', value: Math.abs(metrics.reactivePower || 0), max: Math.abs(metrics.maxReactivePower || 100), unit: 'kVAR' },
-    powerFactor: { label: 'Power Factor', textOnly: metrics.powerFactor || 'N/A' },
-    voltage: { label: 'Voltage (V)', textOnly: `${metrics.voltage || 'N/A'} V` },
-    frequency: { label: 'Frequency (Hz)', textOnly: `${metrics.frequency || 'N/A'} Hz` },
-    capacity: { label: 'Overall Capacity', textOnly: `${metrics.capacity || 'N/A'} kWh` },
-    soc: { label: 'State of Charge (SOC)', value: metrics.soc || 0, max: 100, unit: '%' },
-    soh: { label: 'State of Health (SOH)', value: metrics.soh || 0, max: 100, unit: '%' },
+    activePower: { label: 'Active Power (P)', value: metrics.active_power, max: metrics.maxActivePower || 100, unit: 'kW' },
+    reactivePower: { label: 'Reactive Power (Q)', value: metrics.reactive_power, max: metrics.maxReactivePower || 100, unit: 'kVAR' },
+    powerFactor: { label: 'Power Factor', textOnly: metrics.power_factor },
+    voltage: { label: 'Voltage (V)', textOnly: metrics.voltage },
+    frequency: { label: 'Frequency (Hz)', textOnly: metrics.frequency },
+    capacity: { label: 'Overall Capacity', textOnly: metrics.capacity },
+    soc: { label: 'State of Charge (SOC)', value: metrics.soc, max: 100, unit: '%' },
+    soh: { label: 'State of Health (SOH)', value: metrics.soh, max: 100, unit: '%' },
   }), [metrics]);
-  
 
   const renderCard = (type) => {
-    const card = metricValueMap[type];
-    if (!card) return null;
+  const card = metricValueMap[type];
+  if (!card) return null;
 
-    return (
-      <Box className="metric-card">
-        <Typography variant="body2">{card.label}</Typography>
-        {card.textOnly ? (
-          <Typography variant="h6">{card.textOnly}</Typography>
-        ) : (
-          <CircularProgressbar
-            value={card.value}
-            maxValue={card.max}
-            text={`${card.value} ${card.unit}`}
-            strokeWidth={8}
-            className={metrics[type] < 0 ? 'negative-gauge' : 'positive-gauge'}
-          />
-        )}
-      </Box>
-    );
-  };
+  const isMissing = card.value === null || card.value === undefined;
+  return (
+    <Box className="metric-card" sx={{ position: 'relative' }}>
+      <Typography variant="body2">{card.label}</Typography>
+      
+      {isMissing && (
+        <div style={{
+          position: 'absolute',
+          top: 4,
+          right: 6,
+          color: 'red',
+          fontWeight: 'bold',
+          fontSize: '18px'
+        }}>*</div>
+      )}
+
+      {card.textOnly !== undefined ? (
+        <Typography variant="h6">
+          {(card.textOnly !== null && card.textOnly !== undefined)
+            ? `${card.textOnly} ${card.unit || ''}`
+            : 'N/A'}
+        </Typography>
+      ) : (
+        <CircularProgressbar
+          value={Math.abs(card.value) || 0}
+          maxValue={card.max}
+          text={`${Math.abs(card.value) || 0} ${card.unit}`}
+          strokeWidth={8}
+          className={(card.value || 0) < 0 ? 'negative-gauge' : 'positive-gauge'}
+        />
+      )}
+    </Box>
+  );
+};
+
 
   return (
     <div className={`live-metrics-container ${theme}`}>
       <Typography variant="h5" gutterBottom className="title">Live Metrics</Typography>
 
-      {/* Fixed Operation Mode Card */}
       <Box onClick={() => setOpenModal(true)} className="operation-mode-card locked">
         <Typography variant="body1" className="operation-mode-text">Operation Mode</Typography>
-        <Typography variant="h6" className="operation-mode-value">{metrics.operationMode || 'N/A'}</Typography>
+        <Typography variant="h6" className="operation-mode-value">{metrics.operation_mode || 'N/A'}</Typography>
       </Box>
 
       <Modal open={openModal} onClose={() => setOpenModal(false)}>
@@ -133,24 +154,13 @@ const LiveMetrics = ({ theme }) => {
           </div>
         </div>
       </Modal>
-
-      {/* Metric Cards Section */}
       <div className="metrics-section">
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="singleContainer" direction="vertical" type="grid">
             {(provided) => (
-              <div
-                className="metrics-row"
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-              >
+              <div className="metrics-row" ref={provided.innerRef} {...provided.droppableProps}>
                 {layout.map((metricType, index) => (
-                  <Draggable
-                    key={metricType}
-                    draggableId={metricType}
-                    index={index}
-                    isDragDisabled={metricType === 'operationMode'}
-                  >
+                  <Draggable key={metricType} draggableId={metricType} index={index}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -171,8 +181,6 @@ const LiveMetrics = ({ theme }) => {
       </div>
 
       <Divider sx={{ my: 2 }} />
-
-      {/* Alarm Section */}
       <Typography variant="h5" gutterBottom className="title">Active Alarms</Typography>
       <div className="alarm-list scrollable">
         {alarms.length === 0 ? (

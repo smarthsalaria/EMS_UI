@@ -15,6 +15,7 @@ import Modbus from './pages/Modbus';
 import Network from './pages/Network';
 import PCS from './pages/PCS';
 import Reports from './pages/Reports';
+import ContainerPage from './pages/BESSContainer';
 import UserManagement from './pages/UserManagement';
 
 const AppContent = () => {
@@ -44,6 +45,7 @@ const AppContent = () => {
           <Route path="sld" element={<SLD />} />
           <Route path="pcs" element={<PCS />} />
           <Route path="bess" element={<BESS />} />
+            <Route path="/dashboard/BESS/:containerId" element={<ContainerPage />} />
           <Route path="network" element={<Network />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="reports" element={<Reports />} />
