@@ -2,24 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, Typography, Grid, Container } from '@mui/material';
 import { CircularProgressbar } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
+import axios from 'axios';
 
 const LiveMetricsMobile = () => {
   const [metrics, setMetrics] = useState([]);
   const [alarms, setAlarms] = useState([]);
 
+  const fetchData = async () => {
+    try {
+      const token = sessionStorage.getItem('authToken');
+      const config = {
+        headers: { Authorization: `Bearer ${token}` },
+      };
+
+      const [metricsRes, alarmsRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/metrics', config),
+        axios.get('http://localhost:5000/api/alarms', config),
+      ]);
+
+      setMetrics(metricsRes.data);
+      setAlarms(alarmsRes.data);
+    } catch (error) {
+      console.error('Error fetching metrics or alarms:', error);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/path/to/dummy.json'); // Update path if needed
-        const data = await response.json();
-
-        setMetrics(data.metricsTimeline);
-        setAlarms(data.alarms);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
     fetchData();
   }, []);
 
@@ -34,14 +42,14 @@ const LiveMetricsMobile = () => {
           <Grid item xs={12} md={6} key={index}>
             <Card sx={{ height: '100%' }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>{metric.operationMode}</Typography>
+                <Typography variant="h6" gutterBottom>{metric.operation_mode}</Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={4}>
                     <Typography variant="body2" align="center">Active Power</Typography>
                     <CircularProgressbar
-                      value={metric.activePower}
-                      maxValue={metric.maxActivePower}
-                      text={`${metric.activePower} kW`}
+                      value={Math.abs(metric.active_power)}
+                      maxValue={metric.max_active_power}
+                      text={`${metric.active_power} kW`}
                     />
                   </Grid>
                   <Grid item xs={4}>

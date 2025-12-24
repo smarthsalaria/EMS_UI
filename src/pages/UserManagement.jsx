@@ -47,7 +47,8 @@ const UserManagement = () => {
     try {
       const config = getAuthConfig();
       console.log('Fetching users with headers:', config);
-      const res = await axios.get('http://localhost:5000/debug-users');
+      const res = await axios.get('http://localhost:5000/api/users', getAuthConfig());
+
 
 
       if (Array.isArray(res.data)) {
@@ -113,13 +114,13 @@ const UserManagement = () => {
         if (!formData.password) delete payload.password;
 
         await axios.put(
-          `http://localhost:5000/users/${editingUser.id}`,
+          `http://localhost:5000/api/users/${editingUser.id}`,
           payload,
           config
         );
         showSnackbar('User updated successfully.', 'success');
       } else {
-        await axios.post('http://localhost:5000/users', formData, config);
+        await axios.post('http://localhost:5000/api/users', formData, config);
         showSnackbar('User created successfully.', 'success');
       }
       handleClose();
@@ -133,7 +134,7 @@ const UserManagement = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     try {
-      await axios.delete(`http://localhost:5000/users/${id}`, getAuthConfig());
+      await axios.delete(`http://localhost:5000/api/users/${id}`, config);
       showSnackbar('User deleted successfully.', 'success');
       fetchUsers();
     } catch (err) {
